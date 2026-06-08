@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>互动式日历转盘 - 完整动效版</title>
+<style>
+    body {
+        background-color: #fdfbf7; 
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        overflow: hidden;
+        font-family: 'Helvetica Neue', Arial, sans-serif;
+    }
+
+    /* 顶部的星期按钮控制区 - 初始隐藏 */
+    .controls {
+        position: absolute;
+        top: 5vh;
+        display: flex;
+        gap: 10px;
+        z-index: 100;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 1s ease-in-out;
+    }
+
+    /* 底部的日期按钮控制区 - 新增 */
+    .controls-date {
+        position: absolute;
+        bottom: 5vh;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+        max-width: 90%;
+        z-index: 100;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 1s ease-in-out;
+    }
+
+    .controls.show, .controls-date.show {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .controls button, .controls-date button {
+        background: #333;
+        color: #fdfbf7;
+        border: none;
+        border-radius: 20px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: all 0.3s;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    .controls button {
+        padding: 10px 20px;
+        font-size: 16px;
+    }
+
+    .controls-date button {
+        padding: 8px 15px;
+        font-size: 16px;
+    }
+
+    .controls button:hover, .controls-date button:hover {
+        background: #555;
+        transform: translateY(-2px);
+    }
+
+    .controls button:active, .controls-date button:active {
+        transform: translateY(1px) scale(0.95);
+    }
+
+    /* 按钮选中状态高亮 - 新增 */
+    .controls button.selected, .controls-date button.selected {
+        background: #ff2d55;
+        color: #fff;
+        transform: scale(1.05);
+        box-shadow: 0 0 10px rgba(255, 45, 85, 0.5);
+    }
+
+    /* 转盘主容器 */
+    .wheel-container {
+        position: relative;
+        width: 170vmin; 
+        height: 170vmin;
+        max-width: 1400px;
+        max-height: 1400px;
+        margin-top: 60px;
+    }
+
+    /* 所有圆环的基础样式 */
+    .ring {
+        position: absolute;
+        top: 50%;   
+        left: 50%;  
+        transform: translate(-50%, -50%) rotate(0deg); 
+        width: 100%;
+        height: 100%;
+        background-position: center;
+        background-size: contain; 
+        background-repeat: no-repeat;
+    }
+
+    .layer-base { z-index: 0; background-image: url('a.png'); }
+    .ring-outer { z-index: 1; background-image: url('c.png'); }
+    .ring-middle { z-index: 2; background-image: url('b.png'); }
+    .ring-inner { z-index: 3; background-image: url('d.png'); }
+    .layer-cover { z-index: 10; background-image: url('q.png'); pointer-events: none; }
+
+    /* ==========================================
+       ✨ 开场动画 CSS 类
+       ========================================== */
+    .intro-base { animation: popInBounce 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; animation-delay: 0.2s; opacity: 0; }
+    .intro-outer { animation: popInWithTwistCW 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; animation-delay: 0.6s; opacity: 0; }
+    .intro-middle { animation: popInWithTwistCCW 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; animation-delay: 1.0s; opacity: 0; }
+    .intro-inner { animation: popInWithTwistCW 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; animation-delay: 1.4s; opacity: 0; }
+    .intro-cover { animation: coverDropIn 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; animation-delay: 1.8s; opacity: 0; }
+
+    .center-title {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) scale(0);
+        font-size: 48px;
+        font-weight: 900;
+        color: #ff2d55;
+        text-transform: uppercase;
+        letter-spacing: 4px;
+        z-index: 20;
+        opacity: 0;
+        font-style: italic;
+        text-shadow: 3px 3px 0px #111;
+        animation: titlePop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.5) forwards;
+        animation-delay: 2.3s;
+        pointer-events: none;
+        transition: opacity 0.5s ease-out; /* 用于最后淡出 */
+    }
+
+    /* 动效关键帧 */
+    @keyframes popInBounce {
+        0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+        100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    }
+    @keyframes popInWithTwistCW {
+        0% { transform: translate(-50%, -50%) scale(0) rotate(-180deg); opacity: 0; }
+        70% { transform: translate(-50%, -50%) scale(1.05) rotate(10deg); opacity: 1; }
+        100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; }
+    }
+    @keyframes popInWithTwistCCW {
+        0% { transform: translate(-50%, -50%) scale(0) rotate(180deg); opacity: 0; }
+        70% { transform: translate(-50%, -50%) scale(1.05) rotate(-10deg); opacity: 1; }
+        100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; }
+    }
+    @keyframes coverDropIn {
+        0% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; filter: blur(10px); }
+        100% { transform: translate(-50%, -50%) scale(1); opacity: 1; filter: blur(0px); }
+    }
+    @keyframes titlePop {
+        0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+        50% { opacity: 1; }
+        100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    }
+</style>
+</head>
+<body>
+
+    <div class="controls" id="controls">
+        <button onclick="selectDay(0, this)">周一</button>
+        <button onclick="selectDay(1, this)">周二</button>
+        <button onclick="selectDay(2, this)">周三</button>
+        <button onclick="selectDay(3, this)">周四</button>
+        <button onclick="selectDay(4, this)">周五</button>
+        <button onclick="selectDay(5, this)">周六</button>
+        <button onclick="selectDay(6, this)">周日</button>
+    </div>
+
+    <div class="controls-date" id="controls-date"></div>
+
+    <div class="wheel-container">
+        <div class="ring layer-base intro-base" id="ring-base"></div>
+        <div class="ring ring-outer intro-outer" id="ring-outer"></div>
+        <div class="ring ring-middle intro-middle" id="ring-middle"></div>
+        <div class="ring ring-inner intro-inner" id="ring-inner"></div>
+        <div class="ring layer-cover intro-cover" id="ring-cover"></div>
+        
+        <div class="center-title" id="center-title"></div>
+    </div>
+
+<script>
+    // ==========================================
+    // ⚙️ 核心配置区
+    // ==========================================
+    const CONFIG = {
+        outer:  { items: 31, offset: 0, isClockwise: false }, 
+        middle: { items: 7,  offset: 0, isClockwise: true  },
+        inner:  { items: 7,  offset: 0, isClockwise: false }
+    };
+
+    // DOM 元素
+    const outerRing = document.getElementById('ring-outer');
+    const middleRing = document.getElementById('ring-middle');
+    const innerRing = document.getElementById('ring-inner');
+    const baseRing = document.getElementById('ring-base');
+    const coverRing = document.getElementById('ring-cover');
+    const centerTitle = document.getElementById('center-title');
+    const controls = document.getElementById('controls');
+    const controlsDate = document.getElementById('controls-date');
+
+    // 动态生成 1-30 的数字按钮
+    for (let i = 1; i <= 30; i++) {
+        const btn = document.createElement('button');
+        btn.innerText = i;
+        btn.onclick = function() { selectDate(i, this); };
+        controlsDate.appendChild(btn);
+    }
+
+    let angles = { outer: 0, middle: 0, inner: 0 };
+    let speeds = { outer: -0.5, middle: 0.3, inner: -1 }; 
+    let state = 'intro'; // 初始状态为播放开场动画
+    let idleTimer;
+
+    // 状态记录：必须两项都选才会停顿
+    let pendingDay = null;
+    let pendingDate = null;
+
+    // ==========================================
+    // 🎬 开场动画过渡逻辑
+    // ==========================================
+    setTimeout(() => {
+        centerTitle.style.opacity = '0';
+        controls.classList.add('show');
+        controlsDate.classList.add('show'); // 新增：同时显示日期键盘
+
+        baseRing.classList.remove('intro-base');
+        outerRing.classList.remove('intro-outer');
+        middleRing.classList.remove('intro-middle');
+        innerRing.classList.remove('intro-inner');
+        coverRing.classList.remove('intro-cover');
+
+        baseRing.style.opacity = '1';
+        outerRing.style.opacity = '1';
+        middleRing.style.opacity = '1';
+        innerRing.style.opacity = '1';
+        coverRing.style.opacity = '1';
+
+        state = 'spin';
+        loop(); 
+        resetIdleTimer();
+    }, 4000);
+
+    // ==========================================
+    // 交互与停顿判定逻辑
+    // ==========================================
+    function selectDay(dayIndex, btn) {
+        if (state === 'intro' || state === 'stopping') return;
+        pendingDay = dayIndex;
+        
+        // 更新 UI 高亮
+        document.querySelectorAll('#controls button').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        
+        checkAndStopWheel();
+    }
+
+    function selectDate(dateNum, btn) {
+        if (state === 'intro' || state === 'stopping') return;
+        pendingDate = dateNum - 1; // 映射 1-30 到 0-29 索引
+        
+        // 更新 UI 高亮
+        document.querySelectorAll('#controls-date button').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        
+        checkAndStopWheel();
+    }
+
+    function checkAndStopWheel() {
+        // 只有当星期和数字都选定后，才触发停顿
+        if (pendingDay !== null && pendingDate !== null) {
+            stopWheel(pendingDay, pendingDate);
+            
+            // 重置待选状态，为下一次操作做准备
+            pendingDay = null;
+            pendingDate = null;
+            
+            // 停顿动作开始后稍微延迟清除按钮的高亮，给用户一个反馈感
+            setTimeout(() => {
+                document.querySelectorAll('.controls button, .controls-date button').forEach(b => b.classList.remove('selected'));
+            }, 600); 
+        }
+    }
+
+    // ==========================================
+    // ⏳ 待机自动恢复逻辑
+    // ==========================================
+    function resetIdleTimer() {
+        if (state === 'intro') return; 
+        
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => {
+            // 无论当前是否处于自转状态，10秒无操作都强制清空“未完成的选择”和“按钮高亮”
+            pendingDay = null;
+            pendingDate = null;
+            document.querySelectorAll('.controls button, .controls-date button').forEach(b => b.classList.remove('selected'));
+
+            // 如果处于停止状态，则恢复自转
+            if (state !== 'spin') {
+                state = 'spin'; 
+                outerRing.style.transition = 'none';
+                middleRing.style.transition = 'none';
+                innerRing.style.transition = 'none';
+            }
+        }, 10000); 
+    }
+
+    document.addEventListener('click', resetIdleTimer);
+
+    // ==========================================
+    // ⚙️ 转盘核心逻辑
+    // ==========================================
+    function updateDOM() {
+        outerRing.style.transform = `translate(-50%, -50%) rotate(${angles.outer}deg)`;
+        middleRing.style.transform = `translate(-50%, -50%) rotate(${angles.middle}deg)`;
+        innerRing.style.transform = `translate(-50%, -50%) rotate(${angles.inner}deg)`;
+    }
+
+    function loop() {
+        if (state === 'spin') {
+            angles.outer += speeds.outer;
+            angles.middle += speeds.middle;
+            angles.inner += speeds.inner;
+            updateDOM();
+        }
+        requestAnimationFrame(loop);
+    }
+
+    function stopWheel(dayIndex, dateIndex) {
+        if (state === 'stopping' || state === 'intro') return; 
+        state = 'stopping';
+
+        const transitionStyle = 'transform 4s cubic-bezier(0.25, 1, 0.5, 1)';
+        outerRing.style.transition = transitionStyle;
+        middleRing.style.transition = transitionStyle;
+        innerRing.style.transition = transitionStyle;
+
+        let targetInner = dayIndex; 
+        let targetMiddle = Math.floor(Math.random() * CONFIG.middle.items); 
+        let targetOuter = dateIndex; // 应用玩家点击选定的日期
+
+        angles.outer = getNextTarget(angles.outer, targetOuter, CONFIG.outer.items, CONFIG.outer.isClockwise, CONFIG.outer.offset, 3);
+        angles.middle = getNextTarget(angles.middle, targetMiddle, CONFIG.middle.items, CONFIG.middle.isClockwise, CONFIG.middle.offset, 3);
+        angles.inner = getNextTarget(angles.inner, targetInner, CONFIG.inner.items, CONFIG.inner.isClockwise, CONFIG.inner.offset, 3);
+
+        updateDOM(); 
+
+        setTimeout(() => {
+            if (state === 'stopping') { 
+                state = 'stopped';
+                outerRing.style.transition = 'none';
+                middleRing.style.transition = 'none';
+                innerRing.style.transition = 'none';
+            }
+        }, 4000);
+    }
+
+    function getNextTarget(currentAngle, targetIndex, totalItems, isClockwise, offset, extraSpins) {
+        const step = 360 / totalItems;
+        let baseTarget = -(targetIndex * step) + offset;
+        
+        let curMod = currentAngle % 360;
+        if (curMod <= 0) curMod += 360; 
+        let tarMod = baseTarget % 360;
+        if (tarMod <= 0) tarMod += 360;
+        
+        let diff = tarMod - curMod;
+        
+        if (isClockwise) {
+            if (diff < 0) diff += 360; 
+            diff += extraSpins * 360;
+        } else {
+            if (diff > 0) diff -= 360; 
+            diff -= extraSpins * 360;
+        }
+        
+        return currentAngle + diff;
+    }
+</script>
+
+</body>
+</html>
